@@ -7,8 +7,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@mysten/dapp-kit/dist/index.css';
 import './style.css';
 
-const PACKAGE_ID = "0xb991eef22dbc92665bfb90143cc822389e9d66ca70a6771ceb06449f8c1408f9";
-const MARKET_ID_HARDCODED = "0x14d09f182dae91d763d38c4f16d405ac60958e0a5450aa60f4d4496580654199";
+// === ID-ID ANDA YANG SUDAH BENAR ===
+const PACKAGE_ID = "0x570f7bb85021ec9767d87e8f57267b3c7348a7da482a5da194ac4358290f2498";
+const MARKET_ID_HARDCODED = "0x6545c8ff275e7ec35f3c7694bbf3c2f5f70b39d9038af64f3ecf97c5f9a98061";
 
 const queryClient = new QueryClient();
 const networks = { testnet: { url: getFullnodeUrl('testnet') } };
@@ -42,7 +43,7 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   const fetchMarkets = useCallback(async () => {
-    if (MARKET_ID_HARDCODED.length === 0) return setMarkets([]);
+    if (!MARKET_ID_HARDCODED.startsWith('0x')) return setMarkets([]);
     const marketObjects = await suiClient.multiGetObjects({
         ids: [MARKET_ID_HARDCODED],
         options: { showContent: true },
@@ -65,7 +66,7 @@ function App() {
       arguments: [],
     });
     signAndExecute({ transaction: tx }, {
-        onSuccess: (result) => {
+        onSuccess: () => {
           alert("Your portfolio has been created!");
           setTimeout(() => { if (account) fetchPortfolio(account.address); }, 2000);
         },
@@ -77,37 +78,39 @@ function App() {
   const handleBuy = useCallback(async (marketId, shareType, amount) => {
     if (!account || !portfolio) return;
     try {
+        const requiredPaymentMIST = BigInt(500_000_000 * amount);
+        const { data: coins } = await suiClient.getCoins({ owner: account.address, coinType: '0x2::sui::SUI' });
+
+        const paymentCoin = coins.find(coin => BigInt(coin.balance) >= requiredPaymentMIST);
+        if (!paymentCoin) {
+            return alert(`You don't have a single SUI coin with enough balance. Required: ${requiredPaymentMIST / 1_000_000_000} SUI.`);
+        }
+        
         const tx = new Transaction();
         const targetFunction = shareType === 'YES' ? 'buy_yes' : 'buy_no';
-        
-        // Untuk MVP, kita hardcode harga awal 0.5 SUI per saham
-        // Nanti, kita akan memanggil `get_yes_price` untuk harga dinamis
-        const requiredPaymentMIST = BigInt(500_000_000 * amount);
-        
-        // Ini adalah cara yang benar: pisahkan jumlah yang tepat dari koin gas
-        const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(requiredPaymentMIST)]);
 
         tx.moveCall({
             target: `${PACKAGE_ID}::market::${targetFunction}`,
             arguments: [
                 tx.object(marketId),
                 tx.object(portfolio.data.objectId),
-                paymentCoin,
+                tx.object(paymentCoin.coinObjectId),
                 tx.pure.u64(amount)
             ],
         });
 
         signAndExecute({ transaction: tx }, {
-            onSuccess: (result) => {
+            onSuccess: () => {
                 alert(`Successfully purchased ${amount} ${shareType} shares!`);
                 setTimeout(() => { if (account) fetchPortfolio(account.address); }, 2000);
             },
             onError: (error) => alert(`Purchase failed: ${error.message}`),
         });
+
     } catch (e) {
         alert(`An error occurred: ${e.message}`);
     }
-  }, [account, portfolio, signAndExecute, fetchPortfolio]);
+  }, [account, portfolio, suiClient, signAndExecute, fetchPortfolio]);
 
   useEffect(() => {
     const loadData = async () => {

@@ -13,6 +13,7 @@ module suimarket::market {
     const EInsufficientShares: u64 = 2;
     const EMarketNotResolved: u64 = 3;
     const EWrongOutcome: u64 = 4;
+    const EInsufficientPoolFunds: u64 = 5;
     
     // --- Share Types ---
     public struct YES_SHARE has store, drop {}
@@ -72,6 +73,16 @@ module suimarket::market {
         (1_000_000_000 * amount_of_shares) - yes_price
     }
 
+    // --- Fungsi untuk menghitung payout saat selling ---
+    public fun get_sell_payout(market: &Market, amount_of_shares: u64, is_yes_share: bool): u64 {
+        let total_supply = balance::supply_value(&market.yes_share_supply) + balance::supply_value(&market.no_share_supply);
+        if (total_supply == 0) { return 0 };
+        
+        let pool_value = balance::value(&market.pool);
+        // Payout proporsional berdasarkan share yang dijual
+        (pool_value * amount_of_shares) / total_supply
+    }
+
     // --- FUNGSI AMM LENGKAP DENGAN PEMBAYARAN YANG BENAR ---
     public entry fun buy_yes(
         market: &mut Market, portfolio: &mut Portfolio, payment: &mut Coin<SUI>, amount_to_buy: u64, ctx: &mut TxContext
@@ -80,12 +91,8 @@ module suimarket::market {
         let required_payment = get_yes_price(market, amount_to_buy);
         assert!(coin::value(payment) >= required_payment, EIncorrectPayment);
 
-        // === PERBAIKAN DI SINI ===
-        // 1. Pisahkan koin pembayaran menjadi objek Coin baru
         let payment_coin = coin::split(payment, required_payment, ctx);
-        // 2. Ambil Balance dari Coin baru tersebut dan hancurkan Coin-nya
         let payment_balance = coin::into_balance(payment_coin);
-        // 3. Gabungkan Balance ke dalam kolam pasar
         balance::join(&mut market.pool, payment_balance);
 
         let new_shares = balance::increase_supply(&mut market.yes_share_supply, amount_to_buy);
@@ -112,7 +119,10 @@ module suimarket::market {
     ) {
         assert!(!market.is_resolved, EMarketResolved);
         assert!(balance::value(&portfolio.yes_shares) >= amount_to_sell, EInsufficientShares);
-        let payout_amount = get_yes_price(market, amount_to_sell);
+        
+        let payout_amount = get_sell_payout(market, amount_to_sell, true);
+        assert!(balance::value(&market.pool) >= payout_amount, EInsufficientPoolFunds);
+        
         let shares_to_sell = balance::split(&mut portfolio.yes_shares, amount_to_sell);
         balance::decrease_supply(&mut market.yes_share_supply, shares_to_sell);
         let payout_coin = coin::take(&mut market.pool, payout_amount, ctx);
@@ -124,7 +134,10 @@ module suimarket::market {
     ) {
         assert!(!market.is_resolved, EMarketResolved);
         assert!(balance::value(&portfolio.no_shares) >= amount_to_sell, EInsufficientShares);
-        let payout_amount = get_no_price(market, amount_to_sell);
+        
+        let payout_amount = get_sell_payout(market, amount_to_sell, false);
+        assert!(balance::value(&market.pool) >= payout_amount, EInsufficientPoolFunds);
+        
         let shares_to_sell = balance::split(&mut portfolio.no_shares, amount_to_sell);
         balance::decrease_supply(&mut market.no_share_supply, shares_to_sell);
         let payout_coin = coin::take(&mut market.pool, payout_amount, ctx);
@@ -145,7 +158,7 @@ module suimarket::market {
         market: &mut Market, portfolio: &mut Portfolio, ctx: &mut TxContext
     ) {
         assert!(market.is_resolved, EMarketNotResolved);
-        let mut payout_amount = 0; // Deklarasikan sebagai 'mut'
+        let mut payout_amount = 0;
         let sender = tx_context::sender(ctx);
         if (market.outcome == 1) { // YES menang
             let total_shares = balance::value(&portfolio.yes_shares);
@@ -168,5 +181,24 @@ module suimarket::market {
             let payout_coin = coin::take(&mut market.pool, payout_amount, ctx);
             transfer::public_transfer(payout_coin, sender);
         }
+    }
+
+    // --- View Functions ---
+    public fun get_market_info(market: &Market): (String, u64, u64, u64, bool, u8) {
+        (
+            market.description,
+            balance::supply_value(&market.yes_share_supply),
+            balance::supply_value(&market.no_share_supply),
+            balance::value(&market.pool),
+            market.is_resolved,
+            market.outcome
+        )
+    }
+
+    public fun get_portfolio_info(portfolio: &Portfolio): (u64, u64) {
+        (
+            balance::value(&portfolio.yes_shares),
+            balance::value(&portfolio.no_shares)
+        )
     }
 }
