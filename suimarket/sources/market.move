@@ -11,6 +11,8 @@ module suimarket::market {
     const EMarketResolved: u64 = 0;
     const EIncorrectPayment: u64 = 1;
     const EInsufficientShares: u64 = 2;
+    const EMarketNotResolved: u64 = 3;
+    const EWrongOutcome: u64 = 4;
     
     // --- Share Types ---
     public struct YES_SHARE has store, drop {}
@@ -24,6 +26,7 @@ module suimarket::market {
         no_share_supply: Supply<NO_SHARE>,
         pool: Balance<SUI>,
         is_resolved: bool,
+        outcome: u8, // 0: unresolved, 1: YES, 2: NO
     }
     public struct Portfolio has key, store {
         id: UID,
@@ -40,6 +43,7 @@ module suimarket::market {
             no_share_supply: balance::create_supply(NO_SHARE {}),
             pool: balance::zero(),
             is_resolved: false,
+            outcome: 0,
         }
     }
     public entry fun create(description: vector<u8>, ctx: &mut TxContext) {
@@ -125,5 +129,44 @@ module suimarket::market {
         balance::decrease_supply(&mut market.no_share_supply, shares_to_sell);
         let payout_coin = coin::take(&mut market.pool, payout_amount, ctx);
         transfer::public_transfer(payout_coin, tx_context::sender(ctx));
+    }
+
+    // --- FUNGSI BARU: Penyelesaian Pasar ---
+    public entry fun resolve_market(
+        market: &mut Market, 
+        outcome: u8
+    ) {
+        assert!(!market.is_resolved, EMarketResolved);
+        market.is_resolved = true;
+        market.outcome = outcome;
+    }
+
+    public entry fun redeem_winnings(
+        market: &mut Market, portfolio: &mut Portfolio, ctx: &mut TxContext
+    ) {
+        assert!(market.is_resolved, EMarketNotResolved);
+        let mut payout_amount = 0; // Deklarasikan sebagai 'mut'
+        let sender = tx_context::sender(ctx);
+        if (market.outcome == 1) { // YES menang
+            let total_shares = balance::value(&portfolio.yes_shares);
+            if (total_shares > 0) {
+                payout_amount = total_shares * 1_000_000_000;
+                let shares_to_redeem = balance::split(&mut portfolio.yes_shares, total_shares);
+                balance::decrease_supply(&mut market.yes_share_supply, shares_to_redeem);
+            }
+        } else if (market.outcome == 2) { // NO menang
+            let total_shares = balance::value(&portfolio.no_shares);
+            if (total_shares > 0) {
+                payout_amount = total_shares * 1_000_000_000;
+                let shares_to_redeem = balance::split(&mut portfolio.no_shares, total_shares);
+                balance::decrease_supply(&mut market.no_share_supply, shares_to_redeem);
+            }
+        } else {
+            abort EWrongOutcome;
+        };
+        if (payout_amount > 0) {
+            let payout_coin = coin::take(&mut market.pool, payout_amount, ctx);
+            transfer::public_transfer(payout_coin, sender);
+        }
     }
 }

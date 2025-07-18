@@ -1,12 +1,5 @@
-PackageID (MASTER ID):
-0xb991eef22dbc92665bfb90143cc822389e9d66ca70a6771ceb06449f8c1408f9
-FactoryAdminCap ID:
-ObjectID: 0x9f5cde351415b79154334cb597364bcd293e11b9b189fc615774078892b06acf
+PackageID (MASTER ID): 0xd83ae32faf20df1f6d7a2b9b6facd358d6ca1a46aaa210dcb448f94e79af74ba
+FactoryAdminCap ID: 0xec5b93d42b550f36b309f8cc0f65462d87af64b8c7fbef869bfb999e3965d49c
 
-ID Pasar (Market ID):
-Dari output create_market, kita mendapatkan ID dari Shared Object Market.
-ObjectID: 0xf1e3e09f492831f88af1e40c9d55bb196fa0ea7468236629009441ff137d85bd
-Ini adalah alamat on-chain dari pasar "Will BTC cross $100k in 2025?".
-ID Portofolio Anda:
-Dari output create_portfolio, kita mendapatkan ID dari objek Portfolio yang sekarang ada di dompet Anda.
-ObjectID: 0xc794349dee9034de55af2ac1897c77b78fc5cdb3856c06bdbbac5469ca40677d
+MarketID: 0x014594d8aa2a82d85785ccbde27384b4ed3c2f52fe612d13a98d3f0b4c9c6623
+PortfolioID: 0xae93681efd410e395eb7f44af9e176beabf07f10972601a7a6700592f86676d4
