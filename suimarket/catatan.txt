@@ -1,0 +1,13 @@
+Peta Harta Karun Anda (Versi Terbaru)
+PackageID (MASTER ID):
+0x7d08a0f3d81e8b4d3e14e085ca0fc69bd7e064260daa41c6442536eb8479b790
+FactoryAdminCap ID:
+ObjectID: 0x85a9c3320631f20477701cf117edf9d995340cfd911029160af24e433eabfa3b
+
+ID Pasar (Market ID):
+Dari output create_market, kita mendapatkan ID dari Shared Object Market.
+ObjectID: 0x063fe61ba2e840ba9fb5eb92833dd5dff5b5159894711befac7b68daa7ab4603
+Ini adalah alamat on-chain dari pasar "Will BTC cross $100k in 2025?".
+ID Portofolio Anda:
+Dari output create_portfolio, kita mendapatkan ID dari objek Portfolio yang sekarang ada di dompet Anda.
+ObjectID: 0xaaba48e769b49b9f6aa7ebee2bf548b29e3c4a9705b41fb201130aad986bfb5e
