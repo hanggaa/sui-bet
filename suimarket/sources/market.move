@@ -10,7 +10,7 @@ module suimarket::market {
     // --- Error Codes ---
     const EMarketResolved: u64 = 0;
     const EIncorrectPayment: u64 = 1;
-    const EInsufficientShares: u64 = 2; // Error baru untuk penjualan
+    const EInsufficientShares: u64 = 2;
     
     // --- Share Types ---
     public struct YES_SHARE has store, drop {}
@@ -64,31 +64,41 @@ module suimarket::market {
         price_per_share * amount_of_shares
     }
     public fun get_no_price(market: &Market, amount_of_shares: u64): u64 {
-        // Harga TIDAK adalah kebalikan dari harga YA
         let yes_price = get_yes_price(market, amount_of_shares);
         (1_000_000_000 * amount_of_shares) - yes_price
     }
 
-    // --- FUNGSI AMM LENGKAP ---
-
+    // --- FUNGSI AMM LENGKAP DENGAN PEMBAYARAN YANG BENAR ---
     public entry fun buy_yes(
-        market: &mut Market, portfolio: &mut Portfolio, payment: Coin<SUI>, amount_to_buy: u64, _ctx: &mut TxContext
+        market: &mut Market, portfolio: &mut Portfolio, payment: &mut Coin<SUI>, amount_to_buy: u64, ctx: &mut TxContext
     ) {
         assert!(!market.is_resolved, EMarketResolved);
         let required_payment = get_yes_price(market, amount_to_buy);
-        assert!(coin::value(&payment) >= required_payment, EIncorrectPayment);
-        coin::put(&mut market.pool, payment);
+        assert!(coin::value(payment) >= required_payment, EIncorrectPayment);
+
+        // === PERBAIKAN DI SINI ===
+        // 1. Pisahkan koin pembayaran menjadi objek Coin baru
+        let payment_coin = coin::split(payment, required_payment, ctx);
+        // 2. Ambil Balance dari Coin baru tersebut dan hancurkan Coin-nya
+        let payment_balance = coin::into_balance(payment_coin);
+        // 3. Gabungkan Balance ke dalam kolam pasar
+        balance::join(&mut market.pool, payment_balance);
+
         let new_shares = balance::increase_supply(&mut market.yes_share_supply, amount_to_buy);
         balance::join(&mut portfolio.yes_shares, new_shares);
     }
     
     public entry fun buy_no(
-        market: &mut Market, portfolio: &mut Portfolio, payment: Coin<SUI>, amount_to_buy: u64, _ctx: &mut TxContext
+        market: &mut Market, portfolio: &mut Portfolio, payment: &mut Coin<SUI>, amount_to_buy: u64, ctx: &mut TxContext
     ) {
         assert!(!market.is_resolved, EMarketResolved);
         let required_payment = get_no_price(market, amount_to_buy);
-        assert!(coin::value(&payment) >= required_payment, EIncorrectPayment);
-        coin::put(&mut market.pool, payment);
+        assert!(coin::value(payment) >= required_payment, EIncorrectPayment);
+
+        let payment_coin = coin::split(payment, required_payment, ctx);
+        let payment_balance = coin::into_balance(payment_coin);
+        balance::join(&mut market.pool, payment_balance);
+        
         let new_shares = balance::increase_supply(&mut market.no_share_supply, amount_to_buy);
         balance::join(&mut portfolio.no_shares, new_shares);
     }
@@ -98,15 +108,9 @@ module suimarket::market {
     ) {
         assert!(!market.is_resolved, EMarketResolved);
         assert!(balance::value(&portfolio.yes_shares) >= amount_to_sell, EInsufficientShares);
-        
-        // Harga jual sama dengan harga beli saat ini
         let payout_amount = get_yes_price(market, amount_to_sell);
-
-        // Ambil saham dari portfolio pemain dan hancurkan
         let shares_to_sell = balance::split(&mut portfolio.yes_shares, amount_to_sell);
         balance::decrease_supply(&mut market.yes_share_supply, shares_to_sell);
-
-        // Ambil SUI dari kolam dan kirim ke pemain
         let payout_coin = coin::take(&mut market.pool, payout_amount, ctx);
         transfer::public_transfer(payout_coin, tx_context::sender(ctx));
     }
@@ -116,12 +120,9 @@ module suimarket::market {
     ) {
         assert!(!market.is_resolved, EMarketResolved);
         assert!(balance::value(&portfolio.no_shares) >= amount_to_sell, EInsufficientShares);
-        
         let payout_amount = get_no_price(market, amount_to_sell);
-
         let shares_to_sell = balance::split(&mut portfolio.no_shares, amount_to_sell);
         balance::decrease_supply(&mut market.no_share_supply, shares_to_sell);
-
         let payout_coin = coin::take(&mut market.pool, payout_amount, ctx);
         transfer::public_transfer(payout_coin, tx_context::sender(ctx));
     }
